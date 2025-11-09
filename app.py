@@ -181,7 +181,7 @@ fig = px.imshow(
              values="monthly_payment"),
     color_continuous_scale='RdYlGn_r',          # low=green, high=red
     aspect="auto",
-    labels=dict(color="Monthly Payment ($)"),
+    labels=dict(color="Monthly Payment"),
     zmin=1_700,                                 # anchor to a fixed min/max for color scale
     zmax=2_025
 )
@@ -203,4 +203,5 @@ st.plotly_chart(fig, use_container_width=True)
 
 # Show the underlying data
 with st.expander("Show Values"):
+
     st.dataframe(df.pivot(index="interest_rate", columns="purchase_price", values="monthly_payment").round(2))
