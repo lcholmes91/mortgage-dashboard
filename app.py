@@ -1,8 +1,9 @@
 # Basic mortgage monthly payment app using streamlit
 # To run locally, go to command line and run:
-# streamlit run ./app.py
-# Must first run pip install streamlit
+# 'streamlit run app.py' from the directory containing this file
+# Must first run 'pip install streamlit'
 
+# Dependencies - these must be in requirements.txt
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -24,6 +25,9 @@ with st.sidebar:
     st.caption("Adjust the sliders below to explore how changes in purchase price, interest rate, and other factors affect your monthly payment.")
     
     # Down Payment, Term, Tax Rate, Insurance, PMI, HOA, Flood
+    # Each slider defines a range of possible values for that parameter,
+    # the default value is used when the app is first loaded, & the label 
+    # formatting displayed.
     down_payment = st.select_slider(
         "Down Payment ($)",
         options=list(range(0, 40_001, 1_000)),
@@ -52,7 +56,8 @@ with st.sidebar:
         "PMI Rate (%)",
         options=list(np.round(np.arange(0.30, 1.51, 0.01), 2)),
         value=0.50,
-        format_func=lambda x: f"{x:.2f}%"
+        format_func=lambda x: f"{x:.2f}%",
+        help="Private Mortgage Insurance (PMI) rate applied if down payment is less than 20% of purchase price"
     )
     hoa_monthly = st.select_slider(
         "Monthly HOA Fees ($)",
@@ -67,7 +72,9 @@ with st.sidebar:
         format_func=lambda x: f"${x:,.0f}"
     )
 
-    # Purchase Prices - define min, max, step
+    # Purchase Prices & Interest Rates - min, max, step
+    # These define the grid of purchase prices & interest rates to evaluate
+    # in the heatmap.
     price_min = st.select_slider(
         "Purchase Price min", 
         options=list(range(230_000, 310_001, 1_000)),
@@ -84,10 +91,9 @@ with st.sidebar:
         "Purchase Price step", 
         options=list(range(1_000, 25_001, 1_000)),
         value=5_000, 
-        format_func=lambda x: f"${x:,.0f}"
+        format_func=lambda x: f"${x:,.0f}",
+        help="Step size for purchase price increments in the heatmap"
     )
-
-    # Interest Rates - define min, max, step
     rate_min = st.select_slider(
         "Interest Rate min (%)", 
         options=np.round(np.arange(3, 8.1, 0.1), 3),
@@ -104,12 +110,13 @@ with st.sidebar:
         "Interest Rate step (%)",
         options=[0.1, 0.25, 0.5, 1.0],
         value=0.25, 
-        format_func=lambda x: f"{x:.2f}%"
+        format_func=lambda x: f"{x:.2f}%",
+        help="Step size for interest rate increments in the heatmap"
     )
 
 
 # ----------------------------
-# Monthly Payment Function
+# Monthly Payment Function - taken mostly from house_buying.ipynb
 # ----------------------------
 def monthly_payment(purchase_price: float, 
                     down_payment: float, 
@@ -157,6 +164,7 @@ def monthly_payment(purchase_price: float,
 prices = np.arange(price_min, price_max + 1, price_step, dtype=int)
 rates = np.round(np.arange(rate_min/100, rate_max/100 + 1e-12, rate_step/100, dtype=float), 4)
 
+# Fill the monthly payment grid
 data = []
 for r in rates:
     for p in prices:
@@ -168,40 +176,49 @@ for r in rates:
         data.append({'interest_rate': r, 
                      'purchase_price': p, 
                      'monthly_payment': payment})  
-
 df = pd.DataFrame(data)
 
 
 # ----------------------------
 # Heatmap (Plotly)
 # ----------------------------
-fig = px.imshow(
-    df.pivot(index="interest_rate", 
-             columns="purchase_price", 
+fig = px.imshow(                                # imshow creates heatmaps as displayed matrices
+    df.pivot(index="interest_rate",             # Create a pivot table of monthly payments with interest rates as rows
+             columns="purchase_price",          # and purchase prices as columns
              values="monthly_payment"),
     color_continuous_scale='RdYlGn_r',          # low=green, high=red
-    aspect="auto",
+    aspect="auto",                              # Auto aspect ratio
+    origin='lower',                             # Put the lowest values at the bottom
     labels=dict(color="Monthly Payment"),
-    zmin=1_700,                                 # anchor to a fixed min/max for color scale
+    zmin=1_700,                                 # Anchor to a fixed min/max for color scale
     zmax=2_025
 )
 
 # Format axes and colorbar
 fig.update_layout(
-    xaxis_title="Purchase Price",
-    yaxis_title="Interest Rate",
-    xaxis=dict(tickformat="$,.0f"),
-    yaxis=dict(tickformat=".1%"),
-    coloraxis_colorbar=dict(tickformat="$,.0f")
+    xaxis_title="Purchase Price",               # X-axis label
+    yaxis_title="Interest Rate",                # Y-axis label
+    xaxis=dict(tickformat="$,.0f"),             # Format x-axis tick labels as currency
+    yaxis=dict(tickformat=".1%"),               # Format y-axis tick labels as percentages
+    coloraxis_colorbar=dict(tickformat="$,.0f") # Format colorbar tick labels as currency
 )
 
-# Add annotations
-fig.update_traces(texttemplate="$%{z:,.0f}", textfont_size=11)
+fig.update_traces(texttemplate="$%{z:,.0f}", textfont_size=11)  # Show formatted monthly payment values in each cell
 
-# Show the figure in Streamlit
+# Show the heatmap figure in Streamlit
 st.plotly_chart(fig, use_container_width=True)
 
 # Show the underlying data
-with st.expander("Show Values"):
+df_wide = df.pivot(index="interest_rate",       # Pivot to wide format for display; rows=interest rates
+                   columns="purchase_price",    # Columns=purchase prices
+                   values="monthly_payment")    # Values=monthly payments  
 
-    st.dataframe(df.pivot(index="interest_rate", columns="purchase_price", values="monthly_payment").round(2))
+# The st.dataframe doesn't honor Styler.format_index/columns names, 
+# so we set them as formatted strings here
+df_wide.index = pd.Index([f"{x:.1%}" for x in df_wide.index], name='Interest Rate')         # Format interest rates as percentages
+df_wide.columns = pd.Index([f"${x:,.0f}" for x in df_wide.columns], name='Purchase Price')  # Format purchase prices as currency
+
+styled = (df_wide.style.format('${:,.2f}'))         # Format all values as currency with 2 decimal places
+
+with st.expander("Show Values"):                    # Collapsible section to show underlying data
+    st.dataframe(styled, use_container_width=True)  # Show the styled DataFrame; auto-stretch to container width
