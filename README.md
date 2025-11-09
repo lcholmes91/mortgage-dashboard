@@ -1,4 +1,4 @@
-![Dashboard Preview](dashboard-1.png)
+![Dashboard Preview](dashboard.png)
 
 # 🏡 Mortgage Affordability Dashboard
 Interactively explore how home prices, interest rates, and lending factors shape monthly payments.
